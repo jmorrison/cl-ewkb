@@ -297,6 +297,21 @@ endianness designator: :BIG-ENDIAN or :LITTLE-ENDIAN."
                                     (:constructor make-geometry-collection (type srid geometries)))
     (geometries nil :type vector))
 
+;; -jm
+(defstruct-and-export (tin (:type vector)
+			   :named
+			   (:include geometry)
+			   (:constructor make-tin (type srid triangles)))
+  (triangles nil :type vector))
+
+;; -jm
+(defstruct-and-export (triangle (:type vector)
+				:named
+				(:include geometry)
+				(:constructor make-triangle (type srid linear-rings)))
+  (linear-rings nil :type vector))
+
+
 ;;; FIXME: document these functions.
 (defparameter +endiannesses+
   '((0 . :big-endian)
@@ -306,7 +321,7 @@ endianness designator: :BIG-ENDIAN or :LITTLE-ENDIAN."
 (defparameter +wkb-m+ #x40000000)
 (defparameter +wkb-srid+ #x20000000)
 
-(defparameter +wkb-typemask+ #x0000000F)
+(defparameter +wkb-typemask+ #x0000001F) ; -jm
 (defparameter +wkb-types+
   '(
     (1 . :point)
@@ -315,7 +330,18 @@ endianness designator: :BIG-ENDIAN or :LITTLE-ENDIAN."
     (4 . :multi-point)
     (5 . :multi-line-string)
     (6 . :multi-polygon)
-    (7 . :geometry-collection)))
+    (7 . :geometry-collection)
+    ;; -jm
+    (8 . :circular-string)
+    (9 . :compound-curve)
+    (10 . :curve-polygon)
+    (11 . :multi-curve)
+    (12 . :multi-surface)
+    (13 . :curve)
+    (14 . :surface)
+    (15 . :polyhedral-surface)
+    (16 . :tin)
+    (17 . :triangle)))
 
 (defun dimension (type)
   (if (zerop (logand +wkb-z+ type))
@@ -392,7 +418,36 @@ endianness designator: :BIG-ENDIAN or :LITTLE-ENDIAN."
       (:geometry-collection
        (dotimes (i (decode-uint32-from endianness in))
          (vector-push-extend (decode-from in) data))
-       (make-geometry-collection type srid data)))))
+       (make-geometry-collection type srid data))
+      ((:circular-string
+	:compound-curve
+	:curve-polygon
+	:multi-curve
+	:multi-surface
+	:curve
+	:surface
+	:polyhedral-surface)
+       (error (format nil "Unsupported geometry type ~a" (cdr (assoc (logand type +wkb-typemask+) +wkb-types+ :test #'=)))))
+      (:tin
+       (let* ((num-polygons (decode-uint32-from endianness in)))
+	 (format *terminal-io* "tin type ~X~%" type)
+	 (format *terminal-io* "num-polygons ~a~%" num-polygons)
+	 (dotimes (i num-polygons)
+	   (let ((triangle (decode-from in)))
+	     #+NIL (format *terminal-io* "i ~a, triangle ~a~%" i triangle)
+	     (vector-push-extend triangle data)))
+	 (make-tin type srid data)))
+      (:triangle
+       (let* ((num-rings (decode-uint32-from endianness in)))
+	 #+NIL (format *terminal-io* "triangle type ~X~%" type)
+	 #+NIL (format *terminal-io* "num-rings ~a~%" num-rings)
+	 (dotimes (i num-rings)
+	   (vector-push-extend (decode-linear-ring in type endianness) data))
+	 (make-triangle type srid data)))
+      (t
+       (format *terminal-io* "type ~X~%" type)
+       (error (format nil "Unsupported geometry type ~a" (logand type +wkb-typemask+))))
+       )))
 
 (defun decode (octets)
   "Function to decode geoobject from WKB/EWKB representation from sequence."
