@@ -430,8 +430,8 @@ endianness designator: :BIG-ENDIAN or :LITTLE-ENDIAN."
        (error (format nil "Unsupported geometry type ~a" (cdr (assoc (logand type +wkb-typemask+) +wkb-types+ :test #'=)))))
       (:tin
        (let* ((num-polygons (decode-uint32-from endianness in)))
-	 (format *terminal-io* "tin type ~X~%" type)
-	 (format *terminal-io* "num-polygons ~a~%" num-polygons)
+	 #+NIL (format *terminal-io* "tin type ~X~%" type)
+	 #+NIL (format *terminal-io* "num-polygons ~a~%" num-polygons)
 	 (dotimes (i num-polygons)
 	   (let ((triangle (decode-from in)))
 	     #+NIL (format *terminal-io* "i ~a, triangle ~a~%" i triangle)
